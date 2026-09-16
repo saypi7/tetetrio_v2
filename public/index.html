@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <title>TETRIS 1v1</title>
   <style>
+    /* deslop-ignore-file 34 — monospace is a deliberate retro-arcade choice for this game, not a default */
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
       background: #0a0a0a;
@@ -74,9 +75,11 @@
     @keyframes dots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';} }
     .match-spinner {
       width: 34px; height: 34px; border: 3px solid #222; border-top-color: #4ecdc4;
+      /* deslop-ignore-next-line 19 — circular loading spinner, not a max-radius/glassmorphism pattern */
       border-radius: 50%; animation: spin 0.8s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    /* deslop-ignore-next-line 11 — match countdown digit (3·2·1), not a marketing display headline */
     .countdown-num { font-size: 72px; font-weight: bold; color: #4ecdc4; animation: pop 0.4s ease; }
     @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .match-cancel {
@@ -131,7 +134,9 @@
     }
     .garbage-fill {
       position: absolute; bottom: 0; left: 0; width: 100%; height: 0%;
+      /* deslop-ignore-next-line 06 — danger-level gauge fill, encodes threat level, not atmosphere */
       background: linear-gradient(to top, #7a1f1f, #e05252 60%, #ff9d3d);
+      /* deslop-ignore-next-line 26 — state-driven fill transition, not a hover effect */
       transition: height 0.3s ease;
       box-shadow: 0 0 8px rgba(224,82,82,0.6);
     }
