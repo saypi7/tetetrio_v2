@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>TETRIS 1v1</title>
+  <style>
+    /* deslop-ignore-file 34 — monospace is a deliberate retro-arcade choice for this game, not a default */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #0a0a0a;
+      display: flex; align-items: center; justify-content: center;
+      min-height: 100vh; font-family: 'Courier New', monospace;
+      color: #fff; flex-direction: column; gap: 10px; overflow: hidden;
+    }
+    #title-screen {
+      position: fixed; inset: 0; background: #0a0a0a;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; z-index: 100; gap: 0;
+    }
+    #title-screen.hidden { display: none; }
+    .title-logo { display: flex; gap: 6px; margin-bottom: 48px; }
+    .title-letter {
+      width: 38px; height: 38px; display: flex; align-items: center;
+      justify-content: center; font-size: 22px; font-weight: bold;
+      font-family: 'Courier New', monospace; color: #0a0a0a;
+      animation: letterDrop 0.5s ease both; border-radius: 6px;
+    }
+    .title-letter:nth-child(1) { background: #00d4d4; animation-delay: 0.05s; }
+    .title-letter:nth-child(2) { background: #d4c000; animation-delay: 0.13s; }
+    .title-letter:nth-child(3) { background: #8800d4; animation-delay: 0.21s; }
+    .title-letter:nth-child(4) { background: #d48800; animation-delay: 0.29s; }
+    .title-letter:nth-child(5) { background: #00b400; animation-delay: 0.37s; }
+    .title-letter:nth-child(6) { background: #d40000; animation-delay: 0.45s; }
+    @keyframes letterDrop {
+      from { transform: translateY(-60px); opacity: 0; }
+      to   { transform: translateY(0);     opacity: 1; }
+    }
+    .title-sub { font-size: 11px; letter-spacing: 6px; color: #888; text-transform: uppercase; margin-bottom: 56px; animation: fadeIn 0.4s ease 0.7s both; }
+    .title-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 52px; animation: fadeIn 0.4s ease 0.85s both; }
+    .ctrl-row { display: flex; align-items: center; gap: 12px; font-size: 11px; color: #555; }
+    .ctrl-key { background: #1e1e1e; border: 1px solid #4a4a4a; color: #eee; font-family: 'Courier New', monospace; font-size: 11px; padding: 3px 8px; min-width: 28px; text-align: center; display: inline-block; }
+    .ctrl-desc { color: #999; letter-spacing: 1px; }
+    .title-start { font-size: 13px; letter-spacing: 4px; color: #666; animation: blink 1.1s ease-in-out 1s infinite, fadeIn 0.4s ease 1s both; text-transform: uppercase; cursor: pointer; }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    #title-bg-canvas { position: fixed; inset: 0; z-index: 99; pointer-events: none; opacity: 0.18; }
+    #flash-overlay { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 200; }
+    #flash-overlay.flash { animation: flashPop 0.5s ease-out; }
+    @keyframes flashPop { 0% { opacity: 0; } 8% { opacity: 0.95; } 100% { opacity: 0; } }
+
+    .mode-select { display: flex; gap: 22px; animation: fadeIn 0.4s ease 1s both; }
+    .mode-btn {
+      border: 1.5px solid #444; border-radius: 8px; padding: 22px 44px;
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      cursor: pointer; transition: border-color 0.15s, transform 0.15s, background 0.15s;
+    }
+    .mode-btn:hover { border-color: #4ecdc4; transform: translateY(-2px); background: rgba(78,205,196,0.08); }
+    .mode-btn-title { font-size: 17px; font-weight: bold; letter-spacing: 3px; color: #fff; text-transform: uppercase; }
+    .mode-btn-sub { font-size: 11px; letter-spacing: 1px; color: #aaa; }
+    #find-match-btn:hover .mode-btn-title { color: #4ecdc4; }
+    #solo-btn:hover .mode-btn-title { color: #e8920a; }
+    #solo-btn:hover { border-color: #e8920a; background: rgba(232,146,10,0.08); }
+
+    .solo-mode .opponent-col,
+    .solo-mode .garbage-gauge-wrap { display: none; }
+
+    #match-screen {
+      position: fixed; inset: 0; background: #0a0a0a;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 110; gap: 22px;
+    }
+    #match-screen.hidden { display: none; }
+    .match-status { font-size: 14px; letter-spacing: 4px; color: #999; text-transform: uppercase; }
+    .match-dots::after { content: ''; animation: dots 1.4s steps(4,end) infinite; }
+    @keyframes dots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';} }
+    .match-spinner {
+      width: 34px; height: 34px; border: 3px solid #222; border-top-color: #4ecdc4;
+      /* deslop-ignore-next-line 19 — circular loading spinner, not a max-radius/glassmorphism pattern */
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* deslop-ignore-next-line 11 — match countdown digit (3·2·1), not a marketing display headline */
+    .countdown-num { font-size: 72px; font-weight: bold; color: #4ecdc4; animation: pop 0.4s ease; }
+    @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .match-cancel {
+      font-size: 11px; letter-spacing: 2px; color: #aaa; text-transform: uppercase;
+      border: 1px solid #444; padding: 8px 16px; border-radius: 4px; cursor: pointer;
+    }
+    .match-cancel:hover { color: #fff; border-color: #666; }
+
+    #game-wrapper { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+    #game-wrapper.hidden { display: none; }
+    .arena { display: flex; gap: 26px; align-items: flex-start; }
+    .game-area { display: flex; gap: 0; align-items: flex-start; }
+    @keyframes shake {
+      0%   { transform: translate(0,0) rotate(0deg); }
+      10%  { transform: translate(-6px,-3px) rotate(-1deg); }
+      20%  { transform: translate(6px,3px) rotate(1deg); }
+      30%  { transform: translate(-5px,2px) rotate(-0.8deg); }
+      40%  { transform: translate(5px,-2px) rotate(0.8deg); }
+      50%  { transform: translate(-4px,3px) rotate(-0.5deg); }
+      60%  { transform: translate(4px,-3px) rotate(0.5deg); }
+      70%  { transform: translate(-2px,2px) rotate(-0.3deg); }
+      80%  { transform: translate(2px,-2px) rotate(0.3deg); }
+      90%  { transform: translate(-1px,1px) rotate(0deg); }
+      100% { transform: translate(0,0) rotate(0deg); }
+    }
+    .shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+    canvas#game { display: block; border: 2px solid #333; border-radius: 4px; }
+    .left-panel { width: 130px; display: flex; flex-direction: column; align-items: flex-end; padding-right: 10px; gap: 8px; }
+    .right-panel { width: 130px; display: flex; flex-direction: column; align-items: flex-start; padding-left: 10px; gap: 8px; }
+    .panel-label { font-size: 10px; letter-spacing: 3px; color: #666; text-transform: uppercase; margin-bottom: 4px; }
+    .hold-box, .next-box { border: 1px solid #2a2a2a; padding: 8px; width: 110px; border-radius: 4px; background: #0f0f0f; }
+    canvas.mini { display: block; }
+    .score-bar { display: flex; gap: 40px; align-items: baseline; justify-content: center; width: 320px; }
+    .score-item { text-align: center; }
+    .score-label { font-size: 9px; letter-spacing: 3px; color: #555; text-transform: uppercase; }
+    .score-value { font-size: 20px; font-weight: bold; color: #eee; letter-spacing: 1px; }
+    #tspin-label { font-size: 11px; letter-spacing: 2px; color: #a000f0; font-weight: bold; text-align: center; min-height: 14px; opacity: 0; transition: opacity 0.1s; }
+    #tspin-label.show { opacity: 1; }
+    #particle-canvas { position: absolute; pointer-events: none; top: 0; left: 0; }
+    .canvas-wrapper { position: relative; }
+
+    .opponent-col { display: flex; flex-direction: column; align-items: center; gap: 8px; opacity: 0.85; }
+    .opponent-label { font-size: 10px; letter-spacing: 3px; color: #666; text-transform: uppercase; }
+    #opponent-canvas { display: block; border: 2px solid #262626; border-radius: 4px; background: #0d0d0d; }
+    .opp-status { font-size: 10px; color: #444; letter-spacing: 2px; min-height: 14px; }
+    #incoming-garbage { font-size: 11px; color: #e05252; letter-spacing: 1px; min-height: 14px; }
+
+    .garbage-gauge-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .garbage-gauge {
+      width: 18px; height: 500px; background: #131313; border: 1px solid #2a2a2a;
+      border-radius: 6px; position: relative; overflow: hidden;
+    }
+    .garbage-fill {
+      position: absolute; bottom: 0; left: 0; width: 100%; height: 0%;
+      /* deslop-ignore-next-line 06 — danger-level gauge fill, encodes threat level, not atmosphere */
+      background: linear-gradient(to top, #7a1f1f, #e05252 60%, #ff9d3d);
+      /* deslop-ignore-next-line 26 — state-driven fill transition, not a hover effect */
+      transition: height 0.3s ease;
+      box-shadow: 0 0 8px rgba(224,82,82,0.6);
+    }
+
+    #danger-label {
+      position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+      font-size: 13px; letter-spacing: 2px; color: #ff5252; font-weight: bold;
+      background: rgba(0,0,0,0.6); padding: 4px 10px; border-radius: 4px;
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #danger-label.show { opacity: 1; animation: dangerBlink 0.6s ease-in-out infinite; }
+    @keyframes dangerBlink { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+    .game-area.danger canvas#game {
+      border-color: #e05252;
+      animation: dangerBorder 0.6s ease-in-out infinite;
+    }
+    @keyframes dangerBorder {
+      0%,100% { box-shadow: 0 0 0px rgba(224,82,82,0); }
+      50% { box-shadow: 0 0 22px rgba(224,82,82,0.75); }
+    }
+
+    #result-screen {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.88);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      z-index: 120; gap: 18px;
+    }
+    #result-screen.hidden { display: none; }
+    .result-title { font-size: 44px; font-weight: bold; letter-spacing: 4px; }
+    .result-title.win { color: #5cb85c; }
+    .result-title.lose { color: #e05252; }
+    .result-sub { font-size: 12px; color: #777; letter-spacing: 2px; }
+    .match-cancel.result-btn { margin-top: 10px; }
+  </style>
+</head>
+<body>
+
+<canvas id="title-bg-canvas"></canvas>
+<div id="flash-overlay"></div>
+
+<div id="title-screen">
+  <div class="title-logo">
+    <div class="title-letter">T</div><div class="title-letter">E</div>
+    <div class="title-letter">T</div><div class="title-letter">R</div>
+    <div class="title-letter">I</div><div class="title-letter">S</div>
+  </div>
+  <div class="title-sub">Solo &amp; 1 vs 1 Online</div>
+  <div class="title-controls">
+    <div class="ctrl-row"><span class="ctrl-key">←→</span><span class="ctrl-desc">이동</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">↑ / Z</span><span class="ctrl-desc">회전</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">↓</span><span class="ctrl-desc">소프트 드롭</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">SPACE</span><span class="ctrl-desc">하드 드롭</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">C</span><span class="ctrl-desc">홀드</span></div>
+    <div class="ctrl-row"><span class="ctrl-key">P</span><span class="ctrl-desc">일시정지</span></div>
+  </div>
+  <div class="mode-select">
+    <div class="mode-btn" id="solo-btn">
+      <div class="mode-btn-title">SOLO</div>
+      <div class="mode-btn-sub">혼자 연습</div>
+    </div>
+    <div class="mode-btn" id="find-match-btn">
+      <div class="mode-btn-title">1V1 MATCH</div>
+      <div class="mode-btn-sub">온라인 대전</div>
+    </div>
+  </div>
+</div>
+
+<div id="match-screen" class="hidden">
+  <div class="title-logo" style="margin-bottom:8px;">
+    <div class="title-letter">T</div><div class="title-letter">E</div>
+    <div class="title-letter">T</div><div class="title-letter">R</div>
+    <div class="title-letter">I</div><div class="title-letter">S</div>
+  </div>
+  <div id="match-body">
+    <div class="match-spinner"></div>
+  </div>
+  <div class="match-status" id="match-status-text">상대를 찾는 중<span class="match-dots"></span></div>
+  <div class="match-cancel" id="cancel-find-btn">CANCEL</div>
+</div>
+
+<div id="result-screen" class="hidden">
+  <div class="result-title" id="result-title">YOU WIN</div>
+  <div class="result-sub" id="result-sub">상대방이 게임을 종료했습니다</div>
+  <div class="match-cancel result-btn" id="result-back-btn">BACK TO TITLE</div>
+</div>
+
+<div id="game-wrapper" class="hidden">
+  <div class="arena">
+    <div class="garbage-gauge-wrap">
+      <div class="panel-label">Danger</div>
+      <div id="garbage-gauge" class="garbage-gauge"><div id="garbage-fill" class="garbage-fill"></div></div>
+    </div>
+    <div class="game-area" id="game-area">
+      <div class="left-panel">
+        <div class="hold-box">
+          <div class="panel-label">Hold</div>
+          <canvas id="hold-canvas" class="mini" width="94" height="72"></canvas>
+        </div>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas id="game" width="340" height="680"></canvas>
+        <canvas id="particle-canvas" width="340" height="680"></canvas>
+        <div id="danger-label">위험! 곧 게임오버!</div>
+      </div>
+      <div class="right-panel">
+        <div class="next-box">
+          <div class="panel-label">Next</div>
+          <canvas id="next-canvas" class="mini" width="94" height="360"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <div class="opponent-col">
+      <div class="opponent-label">Opponent</div>
+      <canvas id="opponent-canvas" width="170" height="340"></canvas>
+      <div class="opp-status" id="opp-status">연결됨</div>
+      <div id="incoming-garbage"></div>
+    </div>
+  </div>
+
+
+  <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+    <div id="tspin-label">T-SPIN!</div>
+    <div class="score-bar">
+      <div class="score-item"><div class="score-label">Score</div><div class="score-value" id="score">0</div></div>
+      <div class="score-item"><div class="score-label">Level</div><div class="score-value" id="level">1</div></div>
+      <div class="score-item"><div class="score-label">Lines</div><div class="score-value" id="lines">0</div></div>
+    </div>
+  </div>
+</div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket = io();
+let inRoom = false;
+let roomId = null;
+let opponentDead = false;
+let meDead = false;
+let pendingGarbage = 0; 
+let titleActive = true; 
+let gameMode = 'match'; 
+const findBtn = document.getElementById('find-match-btn');
+const soloBtn = document.getElementById('solo-btn');
+const matchScreen = document.getElementById('match-screen');
+const matchBody = document.getElementById('match-body');
+const matchStatusText = document.getElementById('match-status-text');
+const cancelFindBtn = document.getElementById('cancel-find-btn');
+const resultScreen = document.getElementById('result-screen');
+const resultTitle = document.getElementById('result-title');
+const resultSub = document.getElementById('result-sub');
+const resultBackBtn = document.getElementById('result-back-btn');
+const oppStatusEl = document.getElementById('opp-status');
+const incomingGarbageEl = document.getElementById('incoming-garbage');
+const opponentCanvas = document.getElementById('opponent-canvas');
+const opponentCtx = opponentCanvas.getContext('2d');
+
+soloBtn.addEventListener('click', () => {
+  gameMode = 'solo';
+  document.getElementById('title-screen').classList.add('hidden');
+  document.getElementById('game-wrapper').classList.remove('hidden');
+  document.getElementById('game-wrapper').classList.add('solo-mode');
+  titleActive = false;
+  cancelAnimationFrame(titleRaf);
+  init();
+});
+
+findBtn.addEventListener('click', () => {
+  gameMode = 'match';
+  document.getElementById('game-wrapper').classList.remove('solo-mode');
+  document.getElementById('title-screen').classList.add('hidden');
+  matchScreen.classList.remove('hidden');
+  matchStatusText.textContent = '';
+  matchStatusText.innerHTML = '상대를 찾는 중<span class="match-dots"></span>';
+  matchBody.innerHTML = '<div class="match-spinner"></div>';
+  socket.emit('findMatch');
+});
+
+cancelFindBtn.addEventListener('click', () => {
+  socket.emit('cancelFind');
+  matchScreen.classList.add('hidden');
+  document.getElementById('title-screen').classList.remove('hidden');
+});
+
+resultBackBtn.addEventListener('click', () => window.location.reload());
+
+socket.on('waitingForOpponent', () => {
+  matchStatusText.innerHTML = '상대를 찾는 중<span class="match-dots"></span>';
+});
+
+socket.on('matchFound', ({ room }) => {
+  inRoom = true;
+  roomId = room;
+  runCountdown();
+});
+
+function runCountdown() {
+  let n = 3;
+  matchStatusText.textContent = '상대를 찾았습니다!';
+  const tick = () => {
+    if (n > 0) {
+      matchBody.innerHTML = `<div class="countdown-num">${n}</div>`;
+      n--;
+      setTimeout(tick, 700);
+    } else {
+      matchBody.innerHTML = `<div class="countdown-num">GO!</div>`;
+      setTimeout(() => {
+        matchScreen.classList.add('hidden');
+        document.getElementById('game-wrapper').classList.remove('hidden');
+        titleActive = false;
+        cancelAnimationFrame(titleRaf);
+        init();
+      }, 500);
+    }
+  };
+  tick();
+}
+
+socket.on('opponentBoard', (payload) => {
+  drawOpponentBoard(payload.board);
+});
+
+socket.on('receiveGarbage', (count) => {
+  if (meDead) return;
+  pendingGarbage += count;
+  incomingGarbageEl.textContent = `+${pendingGarbage} 줄 공격 대기중`;
+  updateGarbageGauge();
+  playGarbageWarnSfx();
+});
+
+socket.on('opponentGameOver', () => {
+  opponentDead = true;
+  oppStatusEl.textContent = '상대방 탈락';
+  if (!meDead) showResult(true, '상대방이 게임 오버 되었습니다');
+});
+
+socket.on('opponentLeft', () => {
+  oppStatusEl.textContent = '상대방 접속 종료';
+  if (!meDead && inRoom) showResult(true, '상대방이 나갔습니다');
+  inRoom = false;
+});
+
+function showResult(won, sub) {
+  cancelAnimationFrame(rAF);
+  stopBgm();
+  if (dangerBeepTimer) { clearInterval(dangerBeepTimer); dangerBeepTimer=null; }
+  resultTitle.textContent = won ? 'YOU WIN' : 'YOU LOSE';
+  resultTitle.className = 'result-title ' + (won ? 'win' : 'lose');
+  resultSub.textContent = sub || '';
+  resultScreen.classList.remove('hidden');
+}
+
+function drawOpponentBoard(flatBoard) {
+  const cell = opponentCanvas.width / COLS;
+  opponentCtx.clearRect(0, 0, opponentCanvas.width, opponentCanvas.height);
+  opponentCtx.strokeStyle = '#161616';
+  for (let r = 0; r < VISIBLE_ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      opponentCtx.strokeRect(c * cell, r * cell, cell, cell);
+      const v = flatBoard[r * COLS + c];
+      if (v) drawBlock3D(opponentCtx, c, r, v, cell);
+    }
+  }
+}
+
+function broadcastBoard() {
+  if (!inRoom) return;
+  const flat = [];
+  for (let r = BUFFER_ROWS; r < ROWS; r++) for (let c = 0; c < COLS; c++) flat.push(board[r][c] || 0);
+  socket.emit('boardUpdate', { board: flat });
+}
+
+const GARBAGE_TABLE = [0, 0, 1, 2, 4];
+const TSPIN_GARBAGE = [2, 4, 6];
+
+function sendGarbageForClear(cleared, isTSpin) {
+  if (cleared === 0 || gameMode !== 'match' || !inRoom) return;
+  const amount = isTSpin ? TSPIN_GARBAGE[Math.min(cleared - 1, 2)] : GARBAGE_TABLE[cleared];
+  if (amount > 0) socket.emit('garbage', amount);
+}
+
+function applyPendingGarbage() {
+  if (pendingGarbage <= 0) return;
+  const n = pendingGarbage;
+  pendingGarbage = 0;
+  incomingGarbageEl.textContent = '';
+  updateGarbageGauge();
+  let toppedOut = false;
+  for (let i = 0; i < n; i++) {
+    if (board[0].some(cell => cell !== 0)) toppedOut = true;
+    board.shift();
+    const gapCol = Math.floor(Math.random() * COLS);
+    const row = Array(COLS).fill('#4a4a4a');
+    row[gapCol] = 0;
+    board.push(row);
+  }
+  updateDangerState();
+  if (toppedOut) endGame();
+}
+
+function updateGarbageGauge() {
+  const GAUGE_MAX = 14;
+  const pct = Math.min(100, (pendingGarbage / GAUGE_MAX) * 100);
+  const fillEl = document.getElementById('garbage-fill');
+  if (fillEl) fillEl.style.height = pct + '%';
+}
+</script>
+
+<script>
+const titleBgCanvas = document.getElementById('title-bg-canvas');
+const tbCtx = titleBgCanvas.getContext('2d');
+const PIECE_COLORS_LIST = ['#4ecdc4','#c8b400','#9b4dca','#e8920a','#5cb85c','#e05252','#5b78e0'];
+const BG_SIZE = 24;
+let bgBlocks = [], titleRaf;
+function resizeTitleBg() { titleBgCanvas.width = window.innerWidth; titleBgCanvas.height = window.innerHeight; }
+function initBgBlocks() {
+  bgBlocks = [];
+  for (let i = 0; i < 28; i++) bgBlocks.push({ x: Math.random()*window.innerWidth, y: Math.random()*window.innerHeight, color: PIECE_COLORS_LIST[Math.floor(Math.random()*PIECE_COLORS_LIST.length)], speed: 0.4+Math.random()*1.1, size: BG_SIZE*(0.7+Math.random()*0.6), alpha: 0.08+Math.random()*0.18, rot: Math.random()*Math.PI*2, rotSpeed: (Math.random()-0.5)*0.012 });
+}
+function animateTitleBg() {
+  if (!titleActive) return;
+  titleRaf = requestAnimationFrame(animateTitleBg);
+  tbCtx.clearRect(0,0,titleBgCanvas.width,titleBgCanvas.height);
+  for (const b of bgBlocks) {
+    b.y+=b.speed; b.rot+=b.rotSpeed;
+    if (b.y>window.innerHeight+b.size*2) { b.y=-b.size*2; b.x=Math.random()*window.innerWidth; }
+    tbCtx.save(); tbCtx.globalAlpha=b.alpha; tbCtx.translate(b.x,b.y); tbCtx.rotate(b.rot);
+    tbCtx.fillStyle=b.color; tbCtx.beginPath(); tbCtx.roundRect(-b.size/2,-b.size/2,b.size-1,b.size-1,4); tbCtx.fill();
+    tbCtx.restore();
+  }
+}
+resizeTitleBg(); initBgBlocks(); animateTitleBg();
+window.addEventListener('resize', resizeTitleBg);
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const nextCanvas = document.getElementById('next-canvas');
+const nextCtx = nextCanvas.getContext('2d');
+const holdCanvas = document.getElementById('hold-canvas');
+const holdCtx = holdCanvas.getContext('2d');
+const particleCanvas = document.getElementById('particle-canvas');
+const pCtx = particleCanvas.getContext('2d');
+const gameArea = document.getElementById('game-area');
+
+const GRID = 34;
+const COLS = 10, VISIBLE_ROWS = 20, BUFFER_ROWS = 6, NEXT_COUNT = 5, MINI_SIZE = 18;
+const ROWS = VISIBLE_ROWS + BUFFER_ROWS;
+
+const PIECES = {
+  I: { shape: [[0,0,0,0],[1,1,1,1],[0,0,0,0],[0,0,0,0]], color: '#4ecdc4', dark: '#2ea89f', mid: '#65ddd4' },
+  O: { shape: [[1,1],[1,1]],                              color: '#c8b400', dark: '#a09000', mid: '#ddc800' },
+  T: { shape: [[0,1,0],[1,1,1],[0,0,0]],                  color: '#9b4dca', dark: '#7a3aaa', mid: '#b060e0' },
+  S: { shape: [[0,1,1],[1,1,0],[0,0,0]],                  color: '#5cb85c', dark: '#3d9a3d', mid: '#72cc72' },
+  Z: { shape: [[1,1,0],[0,1,1],[0,0,0]],                  color: '#e05252', dark: '#c03030', mid: '#ee6868' },
+  J: { shape: [[1,0,0],[1,1,1],[0,0,0]],                  color: '#5b78e0', dark: '#3a58c0', mid: '#7090f0' },
+  L: { shape: [[0,0,1],[1,1,1],[0,0,0]],                  color: '#e8920a', dark: '#c07000', mid: '#f8a82a' },
+};
+
+const WALL_KICKS = {
+  '0->1':[[-1,0],[-1,-1],[0,2],[-1,2]],'1->0':[[1,0],[1,1],[0,-2],[1,-2]],
+  '1->2':[[1,0],[1,1],[0,-2],[1,-2]],'2->1':[[-1,0],[-1,-1],[0,2],[-1,2]],
+  '2->3':[[1,0],[1,-1],[0,2],[1,2]],'3->2':[[-1,0],[-1,1],[0,-2],[-1,-2]],
+  '3->0':[[-1,0],[-1,1],[0,-2],[-1,-2]],'0->3':[[1,0],[1,-1],[0,2],[1,2]],
+};
+const SCORE_TABLE = [0,100,300,500,800];
+const TSPIN_SCORE = [400,800,1200];
+const LOCK_DELAY = 1000, BLINK_INTERVAL = 150, MAX_RESETS = 15;
+
+let board, piece, sequence, nextQueue=[], holdPiece, canHold;
+let score, level, lines, gameOver, paused, rAF, dropCounter, dropInterval;
+let lastTime=0, lockTimer, isOnGround, blinkTimer, blinkOn, moveResets, lastRotated;
+let rHoldTimer=null;
+let tspinLabelTimer=null, particles=[];
+let gameStartTime=0, dangerActive=false, dangerBeepTimer=null;
+
+const gradCache = {};
+
+function getPieceInfo(color) {
+  for (const key of Object.keys(PIECES)) {
+    if (PIECES[key].color === color) return PIECES[key];
+  }
+  return { color, dark: color, mid: color };
+}
+
+function drawBlock3D(context, x, y, color, size, alpha) {
+  size = size ?? GRID; alpha = alpha ?? 1;
+  const px = x * size, py = y * size;
+  const pad = size * 0.07;
+  const r = size * 0.22; 
+  const w = size - 1 - pad * 2;
+  const h = size - 1 - pad * 2;
+  const bx = px + pad, by = py + pad;
+
+  context.save();
+  context.globalAlpha = alpha;
+
+  const info = getPieceInfo(color);
+  const darkCol = info.dark || color;
+  const midCol = info.mid || color;
+
+  const g = context.createLinearGradient(bx, by, bx, by + h);
+  g.addColorStop(0, midCol);
+  g.addColorStop(0.45, color);
+  g.addColorStop(1, darkCol);
+
+  context.beginPath();
+  context.roundRect(bx, by, w, h, r);
+  context.fillStyle = g;
+  context.fill();
+
+  context.beginPath();
+  context.roundRect(bx, by, w, h, r);
+  context.strokeStyle = darkCol;
+  context.lineWidth = size * 0.06;
+  context.stroke();
+
+  const hlW = w * 0.55, hlH = h * 0.28;
+  const hlGrad = context.createLinearGradient(bx + r, by + r * 0.5, bx + r, by + hlH);
+  hlGrad.addColorStop(0, 'rgba(255,255,255,0.55)');
+  hlGrad.addColorStop(1, 'rgba(255,255,255,0.0)');
+  context.beginPath();
+  context.roundRect(bx + r * 0.5, by + r * 0.5, hlW, hlH, r * 0.5);
+  context.fillStyle = hlGrad;
+  context.fill();
+
+  const leGrad = context.createLinearGradient(bx, by, bx + w * 0.18, by);
+  leGrad.addColorStop(0, 'rgba(255,255,255,0.25)');
+  leGrad.addColorStop(1, 'rgba(255,255,255,0.0)');
+  context.beginPath();
+  context.roundRect(bx, by, w * 0.18, h, [r, 0, 0, r]);
+  context.fillStyle = leGrad;
+  context.fill();
+
+  const bsGrad = context.createLinearGradient(bx, by + h * 0.7, bx, by + h);
+  bsGrad.addColorStop(0, 'rgba(0,0,0,0)');
+  bsGrad.addColorStop(1, 'rgba(0,0,0,0.22)');
+  context.beginPath();
+  context.roundRect(bx, by + h * 0.7, w, h * 0.3, [0, 0, r, r]);
+  context.fillStyle = bsGrad;
+  context.fill();
+
+  context.restore();
+}
+
+function drawGhostBlock(context, x, y, color, size) {
+  const info = getPieceInfo(color);
+  const px = x * size, py = y * size;
+  const pad = size * 0.07;
+  const r = size * 0.22;
+  const w = size - 1 - pad * 2, h = size - 1 - pad * 2;
+  const bx = px + pad, by = py + pad;
+  context.save();
+  context.globalAlpha = 0.22;
+  context.beginPath();
+  context.roundRect(bx, by, w, h, r);
+  context.fillStyle = info.mid || color;
+  context.fill();
+  context.strokeStyle = info.mid || color;
+  context.lineWidth = 1.5;
+  context.stroke();
+  context.restore();
+}
+
+function spawnLineParticles(rows, boardSnapshot) {
+  for (const row of rows) {
+    if (row<BUFFER_ROWS) continue;
+    const canvasRow = row-BUFFER_ROWS;
+    for (let c = 0; c < COLS; c++) {
+      const color = boardSnapshot[row][c];
+      if (!color) continue;
+      const cx = c * GRID + GRID / 2, cy = canvasRow * GRID + GRID / 2;
+      const count = 12 + Math.floor(Math.random() * 5);
+      for (let i = 0; i < count; i++) {
+        const angle = Math.random() * Math.PI * 2, speed = 1.5 + Math.random() * 5;
+        const isShard = Math.random() < 0.55;
+        const info = getPieceInfo(color);
+        particles.push({
+          x: cx+(Math.random()-0.5)*GRID*0.6, y: cy+(Math.random()-0.5)*GRID*0.6,
+          vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed-Math.random()*2,
+          size: isShard?3+Math.random()*5:1.5+Math.random()*2.5,
+          color: isShard ? (info.mid||color) : '#ffffff',
+          alpha:1, rotation:Math.random()*Math.PI*2, rotSpeed:(Math.random()-0.5)*0.3,
+          gravity:0.18+Math.random()*0.12, life:1, decay:0.018+Math.random()*0.022, isShard,
+          radius: (3+Math.random()*3),
+        });
+      }
+    }
+  }
+}
+
+function updateParticles(delta) {
+  const dt = delta/16.67;
+  for (let i=particles.length-1;i>=0;i--) {
+    const p=particles[i];
+    p.x+=p.vx*dt; p.y+=p.vy*dt; p.vy+=p.gravity*dt; p.vx*=Math.pow(0.97,dt);
+    p.rotation+=p.rotSpeed*dt; p.life-=p.decay*dt; p.alpha=Math.max(0,p.life);
+    if (p.life<=0) particles.splice(i,1);
+  }
+}
+
+function drawParticles() {
+  pCtx.clearRect(0,0,particleCanvas.width,particleCanvas.height);
+  for (const p of particles) {
+    pCtx.save(); pCtx.globalAlpha=p.alpha; pCtx.translate(p.x,p.y); pCtx.rotate(p.rotation);
+    if (p.isShard) {
+      pCtx.fillStyle=p.color;
+      pCtx.beginPath(); pCtx.roundRect(-p.size/2,-p.size/2,p.size,p.size,p.radius*0.4); pCtx.fill();
+      pCtx.fillStyle='rgba(255,255,255,0.4)';
+      pCtx.beginPath(); pCtx.roundRect(-p.size/2,-p.size/2,p.size,p.size*0.3,p.radius*0.4); pCtx.fill();
+    } else {
+      pCtx.fillStyle='#ffffff';
+      pCtx.beginPath(); pCtx.arc(0,0,p.size/2,0,Math.PI*2); pCtx.fill();
+    }
+    pCtx.restore();
+  }
+}
+
+function triggerShake() {
+  gameArea.classList.remove('shake'); void gameArea.offsetWidth;
+  gameArea.classList.add('shake');
+  gameArea.addEventListener('animationend',()=>gameArea.classList.remove('shake'),{once:true});
+}
+
+function init() {
+  board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  score=0;level=1;lines=0;gameOver=false;paused=false;meDead=false;
+  dropCounter=0;dropInterval=800;sequence=[];holdPiece=null;canHold=true;
+  nextQueue=[];particles=[];pendingGarbage=0;
+  gameStartTime=performance.now();dangerActive=false;
+  document.getElementById('game-area').classList.remove('danger');
+  document.getElementById('danger-label').classList.remove('show');
+  updateGarbageGauge();
+  for (let i=0;i<NEXT_COUNT+1;i++) nextQueue.push(makePiece());
+  piece=nextQueue.shift();
+  lockTimer=0;isOnGround=false;blinkTimer=0;blinkOn=false;moveResets=0;lastRotated=false;
+  updateUI(); cancelAnimationFrame(rAF); lastTime=0;
+  startBgm();
+  rAF=requestAnimationFrame(loop);
+}
+
+function generateBag() {
+  const bag=Object.keys(PIECES);
+  for (let i=bag.length-1;i>0;i--) { const j=Math.floor(Math.random()*(i+1)); [bag[i],bag[j]]=[bag[j],bag[i]]; }
+  sequence.push(...bag);
+}
+
+function makePiece() {
+  if (sequence.length<7) generateBag();
+  const name=sequence.pop(); const {shape,color}=PIECES[name];
+  return { name,color,rotation:0, shape:shape.map(r=>[...r]),
+    x:Math.floor(COLS/2)-Math.ceil(shape[0].length/2), y:BUFFER_ROWS+(name==='I'?-1:-2) };
+}
+
+function nextPiece() { const p=nextQueue.shift(); nextQueue.push(makePiece()); return p; }
+function resetLockDelay() { if (moveResets<MAX_RESETS){lockTimer=0;moveResets++;} }
+function rotate(shape) { const N=shape.length-1; return shape.map((row,i)=>row.map((_,j)=>shape[N-j][i])); }
+
+function isValid(shape,x,y) {
+  for (let r=0;r<shape.length;r++) for (let c=0;c<shape[r].length;c++) {
+    if (!shape[r][c]) continue;
+    const nx=x+c,ny=y+r;
+    if (nx<0||nx>=COLS||ny>=ROWS) return false;
+    if (ny>=0&&board[ny][nx]) return false;
+  }
+  return true;
+}
+
+function tryRotate() {
+  const fromRot=piece.rotation, toRot=(fromRot+1)%4, rotated=rotate(piece.shape);
+  if (isValid(rotated,piece.x,piece.y)) { piece.shape=rotated;piece.rotation=toRot;lastRotated=true; if(isOnGround)resetLockDelay();return; }
+  for (const [dx,dy] of (WALL_KICKS[`${fromRot}->${toRot}`]||[])) {
+    if (isValid(rotated,piece.x+dx,piece.y+dy)) { piece.x+=dx;piece.y+=dy;piece.shape=rotated;piece.rotation=toRot;lastRotated=true; if(isOnGround)resetLockDelay();return; }
+  }
+}
+
+function checkTSpin() {
+  if (piece.name!=='T'||!lastRotated) return false;
+  const cx=piece.x+1,cy=piece.y+1; let filled=0;
+  for (const [x,y] of [[cx-1,cy-1],[cx+1,cy-1],[cx-1,cy+1],[cx+1,cy+1]]) {
+    if (x<0||x>=COLS||y<0||y>=ROWS) filled++;
+    else if (y>=0&&board[y][x]) filled++;
+  }
+  return filled>=3;
+}
+
+function lock() {
+  const isTSpin=checkTSpin();
+  for (let r=0;r<piece.shape.length;r++) for (let c=0;c<piece.shape[r].length;c++) {
+    if (!piece.shape[r][c]) continue;
+    const row=piece.y+r,col=piece.x+c;
+    if (row<0){endGame();return;}
+    board[row][col]=piece.color;
+  }
+  clearLines(isTSpin);
+  if (gameOver) return;
+  applyPendingGarbage();
+  if (gameOver) return;
+  canHold=true; piece=nextPiece();
+  lockTimer=0;isOnGround=false;blinkTimer=0;blinkOn=false;moveResets=0;lastRotated=false;
+  if (!isValid(piece.shape,piece.x,piece.y)){endGame();return;}
+  updateDangerState();
+  broadcastBoard();
+}
+
+function clearLines(isTSpin) {
+  const clearedRows=[];
+  for (let r=0;r<ROWS;r++) if (board[r].every(c=>c!==0)) clearedRows.push(r);
+  if (clearedRows.length>0) spawnLineParticles(clearedRows,board.map(row=>[...row]));
+  let cleared=clearedRows.length;
+  for (let r=ROWS-1;r>=0;) if (board[r].every(c=>c!==0)){board.splice(r,1);board.unshift(Array(COLS).fill(0));}else r--;
+  if (isTSpin){ score+=((cleared===0)?400:TSPIN_SCORE[Math.min(cleared-1,2)])*level; showTSpinLabel();triggerShake(); }
+  else if (cleared) score+=SCORE_TABLE[cleared]*level;
+  if (cleared){ lines+=cleared;level=Math.floor(lines/10)+1; }
+  if (cleared) playLineClearSfx(cleared, isTSpin);
+  sendGarbageForClear(cleared, isTSpin);
+  updateUI();
+}
+
+function showTSpinLabel() {
+  const el=document.getElementById('tspin-label'); el.classList.add('show');
+  if (tspinLabelTimer) clearTimeout(tspinLabelTimer);
+  tspinLabelTimer=setTimeout(()=>el.classList.remove('show'),1500);
+}
+
+function doHold() {
+  if (!canHold) return; canHold=false;lastRotated=false;
+  const saveName=piece.name;
+  if (holdPiece) {
+    const tmp=holdPiece;
+    holdPiece={name:saveName,color:PIECES[saveName].color,rotation:0,shape:PIECES[saveName].shape.map(r=>[...r])};
+    piece={...tmp,rotation:0,shape:PIECES[tmp.name].shape.map(r=>[...r]),x:Math.floor(COLS/2)-Math.ceil(PIECES[tmp.name].shape[0].length/2),y:tmp.name==='I'?-1:-2};
+  } else {
+    holdPiece={name:saveName,color:PIECES[saveName].color,rotation:0,shape:PIECES[saveName].shape.map(r=>[...r])};
+    piece=nextPiece();
+  }
+  lockTimer=0;isOnGround=false;blinkTimer=0;blinkOn=false;moveResets=0;
+}
+
+function hardDrop() { lastRotated=false; while(isValid(piece.shape,piece.x,piece.y+1))piece.y++; lock(); }
+function ghostY() { let gy=piece.y; while(isValid(piece.shape,piece.x,gy+1))gy++; return gy; }
+function endGame() {
+  gameOver=true; cancelAnimationFrame(rAF); drawGameOver();
+  stopBgm();
+  if (dangerBeepTimer) { clearInterval(dangerBeepTimer); dangerBeepTimer=null; }
+  if (gameMode === 'match') {
+    meDead=true;
+    socket.emit('gameOver');
+    if (!opponentDead) showResult(false, '내 보드가 가득 찼습니다');
+  }
+}
+function computeDropInterval() {
+  const elapsedSec = (performance.now()-gameStartTime)/1000;
+  const timeLevel = Math.floor(elapsedSec/18);
+  const effLevel = level + timeLevel;
+  return Math.max(90, 800 - (effLevel-1)*55);
+}
+
+function updateDangerState() {
+  let topFilled = ROWS;
+  for (let r=0;r<ROWS;r++) { if (board[r].some(c=>c!==0)) { topFilled=r; break; } }
+  const wasDanger = dangerActive;
+  dangerActive = topFilled <= BUFFER_ROWS+3;
+  const areaEl = document.getElementById('game-area');
+  const labelEl = document.getElementById('danger-label');
+  if (dangerActive) { areaEl.classList.add('danger'); labelEl.classList.add('show'); }
+  else { areaEl.classList.remove('danger'); labelEl.classList.remove('show'); }
+  if (dangerActive && !wasDanger) {
+    playDangerBeep();
+    if (dangerBeepTimer) clearInterval(dangerBeepTimer);
+    dangerBeepTimer = setInterval(playDangerBeep, 850);
+  } else if (!dangerActive && wasDanger) {
+    if (dangerBeepTimer) { clearInterval(dangerBeepTimer); dangerBeepTimer=null; }
+  }
+}
+
+function triggerBoardReset() {
+  rHoldTimer = null;
+  if (titleActive || gameOver) return;
+  if (gameMode === 'match' && !inRoom) return;
+  const flashEl = document.getElementById('flash-overlay');
+  flashEl.classList.remove('flash');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('flash');
+  board = Array.from({length:ROWS},()=>Array(COLS).fill(0));
+  pendingGarbage = 0;
+  updateGarbageGauge();
+  incomingGarbageEl.textContent = '';
+  particles = [];
+  canHold = true;
+  piece = nextPiece();
+  lockTimer=0; isOnGround=false; blinkTimer=0; blinkOn=false; moveResets=0; lastRotated=false;
+  dangerActive = false;
+  document.getElementById('game-area').classList.remove('danger');
+  document.getElementById('danger-label').classList.remove('show');
+  if (dangerBeepTimer) { clearInterval(dangerBeepTimer); dangerBeepTimer=null; }
+  if (gameMode === 'match') broadcastBoard();
+}
+
+function updateUI() {
+  document.getElementById('score').textContent=score.toLocaleString();
+  document.getElementById('level').textContent=level;
+  document.getElementById('lines').textContent=lines;
+}
+
+function drawBoard() {
+  ctx.strokeStyle='#181818'; ctx.lineWidth=1;
+  for (let r=0;r<VISIBLE_ROWS;r++) for (let c=0;c<COLS;c++) ctx.strokeRect(c*GRID,r*GRID,GRID,GRID);
+  for (let r=BUFFER_ROWS;r<ROWS;r++) for (let c=0;c<COLS;c++)
+    if (board[r][c]) drawBlock3D(ctx,c,r-BUFFER_ROWS,board[r][c]);
+}
+
+function drawPiece() {
+  const gy=ghostY();
+  for (let r=0;r<piece.shape.length;r++)
+    for (let c=0;c<piece.shape[r].length;c++)
+      if (piece.shape[r][c]&&gy+r>=BUFFER_ROWS)
+        drawGhostBlock(ctx,piece.x+c,gy+r-BUFFER_ROWS,piece.color,GRID);
+
+  const blinkAlpha=(isOnGround&&blinkOn)?0.4:0;
+  for (let r=0;r<piece.shape.length;r++) for (let c=0;c<piece.shape[r].length;c++) {
+    if (piece.shape[r][c]&&piece.y+r>=BUFFER_ROWS) {
+      const cr=piece.y+r-BUFFER_ROWS;
+      drawBlock3D(ctx,piece.x+c,cr,piece.color);
+      if (blinkAlpha>0) {
+        const pad=GRID*0.07, rr=GRID*0.22;
+        ctx.save(); ctx.globalAlpha=blinkAlpha; ctx.fillStyle='#ffffff';
+        ctx.beginPath(); ctx.roundRect((piece.x+c)*GRID+pad,cr*GRID+pad,GRID-1-pad*2,GRID-1-pad*2,rr); ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+}
+
+function drawHold() {
+  holdCtx.clearRect(0,0,holdCanvas.width,holdCanvas.height);
+  if (!holdPiece) return;
+  const s=PIECES[holdPiece.name].shape, sz=MINI_SIZE;
+  const offX=Math.floor((holdCanvas.width/sz-s[0].length)/2);
+  const offY=Math.floor((holdCanvas.height/sz-s.length)/2);
+  const alpha=canHold?1:0.35;
+  for (let r=0;r<s.length;r++) for (let c=0;c<s[r].length;c++)
+    if (s[r][c]) drawBlock3D(holdCtx,offX+c,offY+r,PIECES[holdPiece.name].color,sz,alpha);
+}
+
+function drawNext() {
+  nextCtx.clearRect(0,0,nextCanvas.width,nextCanvas.height);
+  const sz=MINI_SIZE, slotH=nextCanvas.height/NEXT_COUNT;
+  for (let i=0;i<Math.min(NEXT_COUNT,nextQueue.length);i++) {
+    const p=nextQueue[i], s=PIECES[p.name].shape;
+    const offX=Math.floor((nextCanvas.width/sz-s[0].length)/2);
+    const offY=i*slotH/sz+Math.floor((slotH/sz-s.length)/2);
+    for (let r=0;r<s.length;r++) for (let c=0;c<s[r].length;c++)
+      if (s[r][c]) drawBlock3D(nextCtx,offX+c,offY+r,PIECES[p.name].color,sz);
+    if (i<NEXT_COUNT-1) {
+      nextCtx.strokeStyle='#1e1e1e'; nextCtx.lineWidth=1;
+      nextCtx.beginPath(); nextCtx.moveTo(0,(i+1)*slotH); nextCtx.lineTo(nextCanvas.width,(i+1)*slotH); nextCtx.stroke();
+    }
+  }
+}
+
+function drawGameOver() {
+  ctx.fillStyle='rgba(0,0,0,0.82)'; ctx.fillRect(0,canvas.height/2-50,canvas.width,100);
+  ctx.fillStyle='#fff'; ctx.font='bold 28px Courier New'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2-14);
+  ctx.font='13px Courier New'; ctx.fillStyle='#888';
+  ctx.fillText(gameMode==='solo' ? 'R 키를 눌러 재시작' : '결과 화면을 확인하세요',canvas.width/2,canvas.height/2+18);
+}
+
+function drawPause() {
+  ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,canvas.height/2-30,canvas.width,60);
+  ctx.fillStyle='#fff'; ctx.font='bold 24px Courier New'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillText('PAUSED',canvas.width/2,canvas.height/2);
+}
+
+function loop(time=0) {
+  const delta=time-lastTime; lastTime=time;
+  if (!paused&&!gameOver) {
+    dropInterval = computeDropInterval();
+    dropCounter+=delta;
+    const onGround=!isValid(piece.shape,piece.x,piece.y+1);
+    if (onGround) {
+      if (!isOnGround){isOnGround=true;lockTimer=0;blinkTimer=0;blinkOn=false;}
+      lockTimer+=delta;blinkTimer+=delta;
+      if (blinkTimer>=BLINK_INTERVAL){blinkTimer-=BLINK_INTERVAL;blinkOn=!blinkOn;}
+      if (lockTimer>=LOCK_DELAY) lock();
+    } else {
+      isOnGround=false;lockTimer=0;blinkTimer=0;blinkOn=false;
+      if (dropCounter>=dropInterval){dropCounter=0;piece.y++;lastRotated=false;}
+    }
+    updateParticles(delta);
+  }
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawBoard();
+  if (!gameOver) drawPiece();
+  if (paused) drawPause();
+  drawHold(); drawNext(); drawParticles();
+  rAF=requestAnimationFrame(loop);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { window.location.reload(); return; }
+  if (titleActive) return;
+  if (gameMode === 'match' && !inRoom) return;
+  if (gameOver) {
+    if (gameMode === 'solo' && (e.key==='r'||e.key==='R')) init();
+    return;
+  }
+  if (e.key==='p'||e.key==='P'){paused=!paused; if(paused) stopBgm(); else startBgm(); return;}
+  if (paused) return;
+  if (e.key===' ') e.preventDefault();
+  if (e.key==='r'||e.key==='R') {
+    if (!e.repeat && !rHoldTimer) rHoldTimer = setTimeout(triggerBoardReset, 800);
+    return;
+  }
+  switch(e.key) {
+    case 'ArrowLeft':  if(isValid(piece.shape,piece.x-1,piece.y)){piece.x--;lastRotated=false;if(isOnGround)resetLockDelay();}break;
+    case 'ArrowRight': if(isValid(piece.shape,piece.x+1,piece.y)){piece.x++;lastRotated=false;if(isOnGround)resetLockDelay();}break;
+    case 'ArrowUp': case 'z': case 'Z': tryRotate();break;
+    case 'ArrowDown':  if(isValid(piece.shape,piece.x,piece.y+1)){piece.y++;dropCounter=0;lastRotated=false;}break;
+    case ' ':          hardDrop();break;
+    case 'c':case 'C': doHold();break;
+  }
+});
+
+document.addEventListener('keyup', e => {
+  if ((e.key==='r'||e.key==='R') && rHoldTimer) { clearTimeout(rHoldTimer); rHoldTimer=null; }
+});
+</script>
+
+<script>
+let audioCtx = null;
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+findBtn.addEventListener('click', ensureAudio);
+document.getElementById('title-screen').addEventListener('click', ensureAudio);
+
+function playTone(freq, duration=0.15, type='sine', gain=0.15, when=0) {
+  if (!audioCtx) return;
+  const t = audioCtx.currentTime + when;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, t);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + duration);
+  osc.connect(g); g.connect(audioCtx.destination);
+  osc.start(t); osc.stop(t + duration + 0.03);
+}
+
+function playLineClearSfx(cleared, isTSpin) {
+  const base = isTSpin ? 660 : 523.25;
+  const steps = cleared>=4 ? [0,4,7,12] : cleared===3 ? [0,4,7] : cleared===2 ? [0,5] : [0];
+  steps.forEach((n,i) => playTone(base*Math.pow(2,n/12), 0.2, 'triangle', 0.11, i*0.035));
+}
+
+function playGarbageWarnSfx() {
+  playTone(190, 0.14, 'square', 0.09);
+  playTone(150, 0.18, 'square', 0.08, 0.09);
+}
+
+function playDangerBeep() {
+  playTone(920, 0.09, 'square', 0.07);
+}
+
+let bgmTimer = null, bgmStep = 0;
+const BGM_SCALE = [220.00,246.94,261.63,293.66,329.63,349.23,392.00,440.00];
+
+function bgmTick() {
+  const note = BGM_SCALE[bgmStep % BGM_SCALE.length];
+  playTone(note/2, 0.16, 'sawtooth', 0.035);
+  if (bgmStep % 2 === 0) playTone(note, 0.10, 'triangle', 0.028, 0.05);
+  bgmStep++;
+  const tempo = dangerActive ? 165 : 310;
+  bgmTimer = setTimeout(bgmTick, tempo);
+}
+function startBgm() { stopBgm(); bgmStep = 0; if (audioCtx) bgmTick(); }
+function stopBgm() { if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = null; } }
+</script>
+</body>
+</html>
