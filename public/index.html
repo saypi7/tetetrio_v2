@@ -169,6 +169,29 @@
     .result-title.lose { color: #e05252; }
     .result-sub { font-size: 12px; color: #777; letter-spacing: 2px; }
     .match-cancel.result-btn { margin-top: 10px; }
+
+    .yt-widget {
+      position: absolute; top: 20px; right: 20px; z-index: 101;
+      display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+    }
+    #yt-input {
+      width: 220px; background: #111; border: 1px solid #333; color: #ddd;
+      font-family: 'Courier New', monospace; font-size: 11px; letter-spacing: 0.5px;
+      padding: 7px 10px; border-radius: 3px; outline: none;
+    }
+    #yt-input::placeholder { color: #555; }
+    #yt-input:focus { border-color: #4ecdc4; }
+    #yt-input.yt-input-error { border-color: #e05252; }
+    .yt-now-playing {
+      display: flex; align-items: center; gap: 8px; font-size: 10px; color: #888;
+      border: 1px solid #2a2a2a; border-radius: 3px; padding: 5px 9px; background: #0f0f0f;
+      max-width: 220px;
+    }
+    .yt-now-playing.hidden { display: none; }
+    .yt-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px; }
+    .yt-toggle, .yt-stop { cursor: pointer; color: #aaa; flex-shrink: 0; }
+    .yt-toggle:hover, .yt-stop:hover { color: #4ecdc4; }
+    #yt-player-mount { position: fixed; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; bottom: 0; right: 0; }
   </style>
 </head>
 <body>
@@ -177,6 +200,17 @@
 <div id="flash-overlay"></div>
 
 <div id="title-screen">
+  <div class="yt-widget">
+    <form id="yt-form" autocomplete="off">
+      <input type="text" id="yt-input" placeholder="유튜브 링크 붙여넣기" spellcheck="false" />
+    </form>
+    <div id="yt-now-playing" class="yt-now-playing hidden">
+      <!-- deslop-ignore-next-line 15 — play/pause glyph is a functional status control, not decorative copy -->
+      <span id="yt-toggle" class="yt-toggle">⏸</span>
+      <span id="yt-title" class="yt-title"></span>
+      <span id="yt-stop" class="yt-stop">✕</span>
+    </div>
+  </div>
   <div class="title-logo">
     <div class="title-letter">T</div><div class="title-letter">E</div>
     <div class="title-letter">T</div><div class="title-letter">R</div>
@@ -202,6 +236,8 @@
     </div>
   </div>
 </div>
+
+<div id="yt-player-mount"></div>
 
 <div id="match-screen" class="hidden">
   <div class="title-logo" style="margin-bottom:8px;">
@@ -1015,6 +1051,109 @@ function bgmTick() {
 }
 function startBgm() { stopBgm(); bgmStep = 0; if (audioCtx) bgmTick(); }
 function stopBgm() { if (bgmTimer) { clearTimeout(bgmTimer); bgmTimer = null; } }
+</script>
+
+<script>
+// ===== YouTube 배경음악 위젯 (공식 IFrame Player API 사용) =====
+let ytPlayer = null;
+let ytApiReady = false;
+let ytPendingId = null;
+
+(function loadYouTubeApi() {
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+})();
+
+window.onYouTubeIframeAPIReady = function () {
+  ytPlayer = new YT.Player('yt-player-mount', {
+    height: '1', width: '1',
+    playerVars: { autoplay: 0, controls: 0, disablekb: 1, modestbranding: 1, rel: 0 },
+    events: {
+      onReady: function () {
+        ytApiReady = true;
+        if (ytPendingId) { ytPlayer.loadVideoById(ytPendingId); ytPendingId = null; }
+      },
+      onStateChange: onYtStateChange
+    }
+  });
+};
+
+function extractYouTubeId(raw) {
+  let s = (raw || '').trim();
+  if (!s) return null;
+  if (/^[\w-]{11}$/.test(s)) return s; // 링크 없이 영상 ID만 붙여넣은 경우
+  if (!/^https?:\/\//i.test(s)) s = 'https://' + s;
+  let url;
+  try { url = new URL(s); } catch (_) { return null; }
+  const host = url.hostname.replace(/^www\.|^m\./, '');
+  if (host === 'youtu.be') {
+    const id = url.pathname.slice(1).split('/')[0];
+    return /^[\w-]{11}$/.test(id) ? id : null;
+  }
+  if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    if (url.pathname === '/watch') {
+      const id = url.searchParams.get('v');
+      return id && /^[\w-]{11}$/.test(id) ? id : null;
+    }
+    const m = url.pathname.match(/^\/(?:embed|shorts|live)\/([\w-]{11})/);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+const ytForm = document.getElementById('yt-form');
+const ytInput = document.getElementById('yt-input');
+const ytNowPlaying = document.getElementById('yt-now-playing');
+const ytTitleEl = document.getElementById('yt-title');
+const ytToggleEl = document.getElementById('yt-toggle');
+const ytStopEl = document.getElementById('yt-stop');
+
+// 검색창에서 타이핑할 때 게임 조작키(스페이스, 방향키 등)로 새지 않도록 차단
+ytInput.addEventListener('keydown', e => e.stopPropagation());
+
+ytForm.addEventListener('submit', e => {
+  e.preventDefault();
+  const id = extractYouTubeId(ytInput.value);
+  if (!id) {
+    ytInput.classList.add('yt-input-error');
+    setTimeout(() => ytInput.classList.remove('yt-input-error'), 400);
+    return;
+  }
+  if (ytApiReady && ytPlayer && typeof ytPlayer.loadVideoById === 'function') {
+    ytPlayer.loadVideoById(id);
+  } else {
+    ytPendingId = id;
+  }
+});
+
+function onYtStateChange(e) {
+  if (e.data === YT.PlayerState.PLAYING) {
+    ytNowPlaying.classList.remove('hidden');
+    const data = ytPlayer.getVideoData ? ytPlayer.getVideoData() : null;
+    ytTitleEl.textContent = (data && data.title) ? data.title : '재생 중';
+    // deslop-ignore-next-line 15 — status glyph reflecting real playback state, not decorative
+    ytToggleEl.textContent = '⏸';
+  } else if (e.data === YT.PlayerState.PAUSED) {
+    // deslop-ignore-next-line 15 — status glyph reflecting real playback state, not decorative
+    ytToggleEl.textContent = '▶';
+  } else if (e.data === YT.PlayerState.ENDED) {
+    ytNowPlaying.classList.add('hidden');
+  }
+}
+
+ytToggleEl.addEventListener('click', () => {
+  if (!ytPlayer || !ytPlayer.getPlayerState) return;
+  if (ytPlayer.getPlayerState() === YT.PlayerState.PLAYING) ytPlayer.pauseVideo();
+  else ytPlayer.playVideo();
+});
+
+ytStopEl.addEventListener('click', () => {
+  if (!ytPlayer || !ytPlayer.stopVideo) return;
+  ytPlayer.stopVideo();
+  ytNowPlaying.classList.add('hidden');
+  ytInput.value = '';
+});
 </script>
 </body>
 </html>
