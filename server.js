@@ -10,9 +10,15 @@ const io = new Server(server);
 app.use(express.static(path.join(__dirname, 'public')));
 
 let waitingSocket = null;
-const roomOf = new Map(); 
+const roomOf = new Map();
+
+function broadcastOnlineCount() {
+  io.emit('onlineCount', io.engine.clientsCount);
+}
 
 io.on('connection', (socket) => {
+  broadcastOnlineCount();
+
   socket.on('findMatch', () => {
     if (waitingSocket && waitingSocket.connected && waitingSocket.id !== socket.id) {
       const room = `room-${waitingSocket.id}-${socket.id}`;
@@ -57,6 +63,7 @@ io.on('connection', (socket) => {
       roomOf.delete(info.opponentId);
       roomOf.delete(socket.id);
     }
+    broadcastOnlineCount();
   });
 });
 
