@@ -118,6 +118,29 @@
     .score-value { font-size: 20px; font-weight: bold; color: #eee; letter-spacing: 1px; }
     #tspin-label { font-size: 11px; letter-spacing: 2px; color: #a000f0; font-weight: bold; text-align: center; min-height: 14px; opacity: 0; transition: opacity 0.1s; }
     #tspin-label.show { opacity: 1; }
+    #combo-label { font-size: 11px; letter-spacing: 2px; color: #4ecdc4; font-weight: bold; text-align: center; min-height: 14px; opacity: 0; transition: opacity 0.1s; }
+    #combo-label.show { opacity: 1; }
+    .best-item { display: none; }
+    .solo-mode .best-item { display: block; }
+    #best-label {
+      position: absolute; left: 50%; top: 62%; transform: translate(-50%, -50%);
+      font-family: 'Courier New', monospace; font-size: 13px; font-weight: bold; letter-spacing: 2px;
+      color: #4ecdc4; background: rgba(0,0,0,0.85); border: 1px solid #4ecdc4;
+      padding: 5px 12px; border-radius: 3px; opacity: 0; pointer-events: none; transition: opacity 0.15s;
+    }
+    #best-label.show { opacity: 1; }
+    .online-count {
+      position: absolute; top: 20px; left: 20px; z-index: 101;
+      display: flex; align-items: center; gap: 7px;
+      font-size: 10px; color: #888; letter-spacing: 1px;
+      border: 1px solid #2a2a2a; border-radius: 3px; padding: 6px 10px; background: #0f0f0f;
+    }
+    .online-dot {
+      width: 6px; height: 6px; flex-shrink: 0;
+      /* deslop-ignore-next-line 19 — presence/status dot (like an online indicator), not a max-radius pattern */
+      border-radius: 50%;
+      background: #5cb85c;
+    }
     #particle-canvas { position: absolute; pointer-events: none; top: 0; left: 0; }
     .canvas-wrapper { position: relative; }
 
@@ -200,6 +223,10 @@
 <div id="flash-overlay"></div>
 
 <div id="title-screen">
+  <div class="online-count">
+    <span class="online-dot"></span>
+    <span id="online-count-text">- 명 접속 중</span>
+  </div>
   <div class="yt-widget">
     <form id="yt-form" autocomplete="off">
       <input type="text" id="yt-input" placeholder="유튜브 링크 붙여넣기" spellcheck="false" />
@@ -228,7 +255,7 @@
   <div class="mode-select">
     <div class="mode-btn" id="solo-btn">
       <div class="mode-btn-title">SOLO</div>
-      <div class="mode-btn-sub">혼자 연습</div>
+      <div class="mode-btn-sub">혼자 연습<span id="solo-best-hint"></span></div>
     </div>
     <div class="mode-btn" id="find-match-btn">
       <div class="mode-btn-title">1V1 MATCH</div>
@@ -275,6 +302,7 @@
         <canvas id="game" width="340" height="680"></canvas>
         <canvas id="particle-canvas" width="340" height="680"></canvas>
         <div id="danger-label">위험! 곧 게임오버!</div>
+        <div id="best-label">★ NEW BEST!</div>
       </div>
       <div class="right-panel">
         <div class="next-box">
@@ -294,11 +322,15 @@
 
 
   <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
-    <div id="tspin-label">T-SPIN!</div>
+    <div style="display:flex; gap:12px; align-items:center;">
+      <div id="tspin-label">T-SPIN!</div>
+      <div id="combo-label"></div>
+    </div>
     <div class="score-bar">
       <div class="score-item"><div class="score-label">Score</div><div class="score-value" id="score">0</div></div>
       <div class="score-item"><div class="score-label">Level</div><div class="score-value" id="level">1</div></div>
       <div class="score-item"><div class="score-label">Lines</div><div class="score-value" id="lines">0</div></div>
+      <div class="score-item best-item"><div class="score-label">Best</div><div class="score-value" id="best">0</div></div>
     </div>
   </div>
 </div>
@@ -313,6 +345,16 @@ let meDead = false;
 let pendingGarbage = 0; 
 let titleActive = true; 
 let gameMode = 'match'; 
+
+let bestScore = Number(localStorage.getItem('tetris_solo_best') || 0);
+if (bestScore > 0) {
+  document.getElementById('solo-best-hint').textContent = ' · 최고 ' + bestScore.toLocaleString();
+}
+
+socket.on('onlineCount', (n) => {
+  const el = document.getElementById('online-count-text');
+  if (el) el.textContent = n + '명 접속 중';
+});
 const findBtn = document.getElementById('find-match-btn');
 const soloBtn = document.getElementById('solo-btn');
 const matchScreen = document.getElementById('match-screen');
@@ -537,13 +579,14 @@ const WALL_KICKS = {
 };
 const SCORE_TABLE = [0,100,300,500,800];
 const TSPIN_SCORE = [400,800,1200];
+const COMBO_SCORE = 50;
 const LOCK_DELAY = 1000, BLINK_INTERVAL = 150, MAX_RESETS = 15;
 
 let board, piece, sequence, nextQueue=[], holdPiece, canHold;
-let score, level, lines, gameOver, paused, rAF, dropCounter, dropInterval;
+let score, level, lines, combo, gameOver, paused, rAF, dropCounter, dropInterval;
 let lastTime=0, lockTimer, isOnGround, blinkTimer, blinkOn, moveResets, lastRotated;
 let rHoldTimer=null;
-let tspinLabelTimer=null, particles=[];
+let tspinLabelTimer=null, comboLabelTimer=null, particles=[];
 let gameStartTime=0, dangerActive=false, dangerBeepTimer=null;
 
 const gradCache = {};
@@ -696,12 +739,14 @@ function triggerShake() {
 
 function init() {
   board=Array.from({length:ROWS},()=>Array(COLS).fill(0));
-  score=0;level=1;lines=0;gameOver=false;paused=false;meDead=false;
+  score=0;level=1;lines=0;combo=-1;gameOver=false;paused=false;meDead=false;
   dropCounter=0;dropInterval=800;sequence=[];holdPiece=null;canHold=true;
   nextQueue=[];particles=[];pendingGarbage=0;
   gameStartTime=performance.now();dangerActive=false;
   document.getElementById('game-area').classList.remove('danger');
   document.getElementById('danger-label').classList.remove('show');
+  document.getElementById('combo-label').classList.remove('show');
+  document.getElementById('best-label').classList.remove('show');
   updateGarbageGauge();
   for (let i=0;i<NEXT_COUNT+1;i++) nextQueue.push(makePiece());
   piece=nextQueue.shift();
@@ -783,6 +828,13 @@ function clearLines(isTSpin) {
   for (let r=ROWS-1;r>=0;) if (board[r].every(c=>c!==0)){board.splice(r,1);board.unshift(Array(COLS).fill(0));}else r--;
   if (isTSpin){ score+=((cleared===0)?400:TSPIN_SCORE[Math.min(cleared-1,2)])*level; showTSpinLabel();triggerShake(); }
   else if (cleared) score+=SCORE_TABLE[cleared]*level;
+  if (cleared) {
+    combo++;
+    if (combo>=1) { score+=COMBO_SCORE*combo*level; showComboLabel(combo); }
+  } else {
+    combo=-1;
+    hideComboLabel();
+  }
   if (cleared){ lines+=cleared;level=Math.floor(lines/10)+1; }
   if (cleared) playLineClearSfx(cleared, isTSpin);
   sendGarbageForClear(cleared, isTSpin);
@@ -793,6 +845,19 @@ function showTSpinLabel() {
   const el=document.getElementById('tspin-label'); el.classList.add('show');
   if (tspinLabelTimer) clearTimeout(tspinLabelTimer);
   tspinLabelTimer=setTimeout(()=>el.classList.remove('show'),1500);
+}
+
+function showComboLabel(n) {
+  const el=document.getElementById('combo-label');
+  el.textContent = n + ' COMBO';
+  el.classList.add('show');
+  if (comboLabelTimer) clearTimeout(comboLabelTimer);
+  comboLabelTimer=setTimeout(()=>el.classList.remove('show'),1200);
+}
+
+function hideComboLabel() {
+  if (comboLabelTimer) { clearTimeout(comboLabelTimer); comboLabelTimer=null; }
+  document.getElementById('combo-label').classList.remove('show');
 }
 
 function doHold() {
@@ -815,6 +880,12 @@ function endGame() {
   gameOver=true; cancelAnimationFrame(rAF); drawGameOver();
   stopBgm();
   if (dangerBeepTimer) { clearInterval(dangerBeepTimer); dangerBeepTimer=null; }
+  if (gameMode === 'solo' && score > bestScore) {
+    bestScore = score;
+    localStorage.setItem('tetris_solo_best', String(bestScore));
+    document.getElementById('best').textContent = bestScore.toLocaleString();
+    document.getElementById('best-label').classList.add('show');
+  }
   if (gameMode === 'match') {
     meDead=true;
     socket.emit('gameOver');
@@ -873,6 +944,7 @@ function updateUI() {
   document.getElementById('score').textContent=score.toLocaleString();
   document.getElementById('level').textContent=level;
   document.getElementById('lines').textContent=lines;
+  document.getElementById('best').textContent=Math.max(bestScore,score).toLocaleString();
 }
 
 function drawBoard() {
