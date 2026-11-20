@@ -18,7 +18,7 @@
       justify-content: center; z-index: 100; gap: 0;
     }
     #title-screen.hidden { display: none; }
-    .title-logo { display: flex; gap: 6px; margin-bottom: 48px; }
+    .title-logo { display: flex; gap: 6px; margin-bottom: 32px; }
     .title-letter {
       width: 38px; height: 38px; display: flex; align-items: center;
       justify-content: center; font-size: 22px; font-weight: bold;
@@ -35,31 +35,26 @@
       from { transform: translateY(-60px); opacity: 0; }
       to   { transform: translateY(0);     opacity: 1; }
     }
-    .title-sub { font-size: 11px; letter-spacing: 6px; color: #888; text-transform: uppercase; margin-bottom: 56px; animation: fadeIn 0.4s ease 0.7s both; }
-    .title-controls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 52px; animation: fadeIn 0.4s ease 0.85s both; }
-    .ctrl-row { display: flex; align-items: center; gap: 12px; font-size: 11px; color: #555; }
-    .ctrl-key { background: #1e1e1e; border: 1px solid #4a4a4a; color: #eee; font-family: 'Courier New', monospace; font-size: 11px; padding: 3px 8px; min-width: 28px; text-align: center; display: inline-block; }
-    .ctrl-desc { color: #999; letter-spacing: 1px; }
-    .title-start { font-size: 13px; letter-spacing: 4px; color: #666; animation: blink 1.1s ease-in-out 1s infinite, fadeIn 0.4s ease 1s both; text-transform: uppercase; cursor: pointer; }
-    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    .title-controls { display: flex; flex-direction: column; gap: 8px; margin-top: 32px; }
+    .ctrl-row { display: flex; align-items: center; gap: 12px; font-size: 12px; }
+    .ctrl-key { background: #1e1e1e; border: 1px solid #4a4a4a; color: #eee; font-size: 11px; padding: 3px 8px; min-width: 64px; text-align: center; }
+    .ctrl-desc { color: #aaa; }
     #title-bg-canvas { position: fixed; inset: 0; z-index: 99; pointer-events: none; opacity: 0.18; }
     #flash-overlay { position: fixed; inset: 0; background: #fff; opacity: 0; pointer-events: none; z-index: 200; }
     #flash-overlay.flash { animation: flashPop 0.5s ease-out; }
     @keyframes flashPop { 0% { opacity: 0; } 8% { opacity: 0.95; } 100% { opacity: 0; } }
 
-    .mode-select { display: flex; gap: 22px; animation: fadeIn 0.4s ease 1s both; }
+    .mode-select { display: flex; gap: 12px; }
+    .mode-btn, .match-cancel { font-family: inherit; background: #0f0f0f; }
     .mode-btn {
-      border: 1.5px solid #444; border-radius: 8px; padding: 22px 44px;
-      display: flex; flex-direction: column; align-items: center; gap: 8px;
-      cursor: pointer; transition: border-color 0.15s, transform 0.15s, background 0.15s;
+      min-width: 136px; min-height: 60px; padding: 10px 16px;
+      border: 1px solid #444; border-radius: 4px; color: #eee;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+      font-size: 16px; font-weight: bold; cursor: pointer;
+      transition: border-color 0.15s, background-color 0.15s;
     }
-    .mode-btn:hover { border-color: #4ecdc4; transform: translateY(-2px); background: rgba(78,205,196,0.08); }
-    .mode-btn-title { font-size: 17px; font-weight: bold; letter-spacing: 3px; color: #fff; text-transform: uppercase; }
-    .mode-btn-sub { font-size: 11px; letter-spacing: 1px; color: #aaa; }
-    #find-match-btn:hover .mode-btn-title { color: #4ecdc4; }
-    #solo-btn:hover .mode-btn-title { color: #e8920a; }
-    #solo-btn:hover { border-color: #e8920a; background: rgba(232,146,10,0.08); }
+    .mode-btn:hover { border-color: #4ecdc4; background-color: #1e1e1e; }
+    .mode-btn:focus-visible, .match-cancel:focus-visible { outline: 2px solid #4ecdc4; outline-offset: 3px; }
 
     .solo-mode .opponent-col,
     .solo-mode .garbage-gauge-wrap { display: none; }
@@ -70,9 +65,7 @@
       z-index: 110; gap: 22px;
     }
     #match-screen.hidden { display: none; }
-    .match-status { font-size: 14px; letter-spacing: 4px; color: #999; text-transform: uppercase; }
-    .match-dots::after { content: ''; animation: dots 1.4s steps(4,end) infinite; }
-    @keyframes dots { 0%{content:'';} 25%{content:'.';} 50%{content:'..';} 75%{content:'...';} 100%{content:'';} }
+    .match-status { font-size: 16px; color: #ccc; }
     .match-spinner {
       width: 34px; height: 34px; border: 3px solid #222; border-top-color: #4ecdc4;
       /* deslop-ignore-next-line 19 — circular loading spinner, not a max-radius/glassmorphism pattern */
@@ -83,7 +76,7 @@
     .countdown-num { font-size: 72px; font-weight: bold; color: #4ecdc4; animation: pop 0.4s ease; }
     @keyframes pop { from { transform: scale(0.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
     .match-cancel {
-      font-size: 11px; letter-spacing: 2px; color: #aaa; text-transform: uppercase;
+      font-size: 13px; color: #bbb;
       border: 1px solid #444; padding: 8px 16px; border-radius: 4px; cursor: pointer;
     }
     .match-cancel:hover { color: #fff; border-color: #666; }
@@ -182,7 +175,12 @@
     <div class="title-letter">T</div><div class="title-letter">R</div>
     <div class="title-letter">I</div><div class="title-letter">S</div>
   </div>
-  <div class="title-sub">Solo &amp; 1 vs 1 Online</div>
+  <div class="mode-select">
+    <button type="button" class="mode-btn" id="solo-btn">
+      혼자 연습
+    </button>
+    <button type="button" class="mode-btn" id="find-match-btn">온라인 1대1</button>
+  </div>
   <div class="title-controls">
     <div class="ctrl-row"><span class="ctrl-key">←→</span><span class="ctrl-desc">이동</span></div>
     <div class="ctrl-row"><span class="ctrl-key">↑ / Z</span><span class="ctrl-desc">회전</span></div>
@@ -191,35 +189,20 @@
     <div class="ctrl-row"><span class="ctrl-key">C</span><span class="ctrl-desc">홀드</span></div>
     <div class="ctrl-row"><span class="ctrl-key">P</span><span class="ctrl-desc">일시정지</span></div>
   </div>
-  <div class="mode-select">
-    <div class="mode-btn" id="solo-btn">
-      <div class="mode-btn-title">SOLO</div>
-      <div class="mode-btn-sub">혼자 연습</div>
-    </div>
-    <div class="mode-btn" id="find-match-btn">
-      <div class="mode-btn-title">1V1 MATCH</div>
-      <div class="mode-btn-sub">온라인 대전</div>
-    </div>
-  </div>
 </div>
 
 <div id="match-screen" class="hidden">
-  <div class="title-logo" style="margin-bottom:8px;">
-    <div class="title-letter">T</div><div class="title-letter">E</div>
-    <div class="title-letter">T</div><div class="title-letter">R</div>
-    <div class="title-letter">I</div><div class="title-letter">S</div>
-  </div>
   <div id="match-body">
     <div class="match-spinner"></div>
   </div>
-  <div class="match-status" id="match-status-text">상대를 찾는 중<span class="match-dots"></span></div>
-  <div class="match-cancel" id="cancel-find-btn">CANCEL</div>
+  <div class="match-status" id="match-status-text" role="status">상대를 찾는 중</div>
+  <button type="button" class="match-cancel" id="cancel-find-btn">매칭 취소</button>
 </div>
 
 <div id="result-screen" class="hidden">
   <div class="result-title" id="result-title">YOU WIN</div>
   <div class="result-sub" id="result-sub">상대방이 게임을 종료했습니다</div>
-  <div class="match-cancel result-btn" id="result-back-btn">BACK TO TITLE</div>
+  <button type="button" class="match-cancel result-btn" id="result-back-btn">메인 화면</button>
 </div>
 
 <div id="game-wrapper" class="hidden">
@@ -307,8 +290,7 @@ findBtn.addEventListener('click', () => {
   document.getElementById('game-wrapper').classList.remove('solo-mode');
   document.getElementById('title-screen').classList.add('hidden');
   matchScreen.classList.remove('hidden');
-  matchStatusText.textContent = '';
-  matchStatusText.innerHTML = '상대를 찾는 중<span class="match-dots"></span>';
+  matchStatusText.textContent = '상대를 찾는 중';
   matchBody.innerHTML = '<div class="match-spinner"></div>';
   socket.emit('findMatch');
 });
@@ -322,7 +304,7 @@ cancelFindBtn.addEventListener('click', () => {
 resultBackBtn.addEventListener('click', () => window.location.reload());
 
 socket.on('waitingForOpponent', () => {
-  matchStatusText.innerHTML = '상대를 찾는 중<span class="match-dots"></span>';
+  matchStatusText.textContent = '상대를 찾는 중';
 });
 
 socket.on('matchFound', ({ room }) => {
